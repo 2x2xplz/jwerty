@@ -14,6 +14,12 @@
  * @copyright Copyright © 2011, Keith Cirkel
  *
  */
+
+/*
+.* this branch created by Andy Goldberg (github: 2x2xplz)
+.*
+.*/
+
 (function (global, exports) {
 
     // Try require external librairies in Node.js context
@@ -375,13 +381,18 @@
             var i = 0,
                 c = jwertyCode.length - 1,
                 returnValue,
-                jwertyCodeIs;
+                jwertyCodeIs,
+                keyHistory = []; // will keep track of the keys pressed in a successful (matching) sequence
+                // example usage of history info: 
+                // jwerty.key('ctrl+shift+;,[a-e],[f-j],[k-o]' , function() { alert(this.event.keySequence.sequence); });
+
 
             // This is the event listener function that gets returned...
             return function (event) {
 
                 // if jwertyCodeIs returns truthy (string)...
                 if ((jwertyCodeIs = jwerty.is(jwertyCode, event, i))) {
+                    keyHistory.push(event);
                     // ... and this isn't the last key in the sequence,
                     // incriment the key in sequence to check.
                     if (i < c) {
@@ -390,6 +401,8 @@
                     // ... and this is the last in the sequence (or the only
                     // one in sequence), then fire the callback
                     } else {
+                        var h = jwerty.parseHistory(keyHistory); // convert these key events to a succinct object
+                        event['keySequence'] = h; // we attach the object to the last event (instead of adding new parameter to function)
                         returnValue = callbackFunction.call(
                             callbackContext || this, event, jwertyCodeIs);
 
@@ -398,6 +411,7 @@
                         if (returnValue === false) event.preventDefault();
 
                         // Reset i for the next sequence to fire.
+                        keyHistory.length = 0; // reset this too
                         i = 0;
                         return;
                     }
@@ -406,6 +420,7 @@
                 // If the event didn't hit this time, we should reset i to 0,
                 // that is, unless this combo was the first in the sequence,
                 // in which case we should reset i to 1.
+                keyHistory.length = 0; // reset this too
                 i = jwerty.is(jwertyCode, event) ? 1 : 0;
             };
         },
@@ -533,6 +548,31 @@
                 jwertyCode[realI || 0][0]
             );
         },
+
+
+        // create json object representing keys which triggered the sequence
+        // each key is an object
+        // we also create a string named 'sequence' with pipes between keys, like: 'shift+h|e|l|l|o|space|ctrl+w|o|r|l|d'
+        parseHistory: function(keyHistory) {
+            var c = 0; // counter 
+            var s = []; // sequence string
+            // create an object for each key
+            var histObject = keyHistory.reduce(function ( seq , current ) {
+                var k = { 'key' : current.key , 'code' : current.keyCode , 'modifiers' : [] , 'order' : c };
+                // modifiers is an array within the object
+                k.modifiers = ['alt' , 'ctrl' , 'shift' , 'meta'].filter(function(m) {
+                    return current[m + 'Key']; 
+                }); 
+                // adds + signs to create a string such as 'ctrl+alt+z'
+                s.push(k.modifiers.join('+') + ((k.modifiers.length > 0) ? '+' : '') + k.key);
+                // add the key's object to the overall object
+                seq[c++] = k; // seq uses c's original value, 1 is added after
+                seq['sequence'] = s.join('|'); 
+                return seq;
+            }, {});
+            return histObject;
+        },
+
 
         KEYS: _keys
     };
